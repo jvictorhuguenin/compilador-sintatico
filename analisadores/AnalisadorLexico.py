@@ -2,6 +2,7 @@ import ply.lex as lex
 from utils.Cor import Cor
 from utils.Token import Token
 
+
 class AnalisadorLexico:
     # Palavras reservadas
     palavras_reservadas = {
@@ -30,7 +31,7 @@ class AnalisadorLexico:
         Token.ID.value,
         Token.NUMERO.value,
         Token.STRING.value,
-        Token.ATRIBUICAO.value, 
+        Token.ATRIBUICAO.value,
         Token.DOIS_PONTOS.value,
         Token.PONTO_VIRGULA.value,
         Token.VIRGULA.value,
@@ -44,9 +45,9 @@ class AnalisadorLexico:
     ] + list(palavras_reservadas.values())
 
     # Regras para tokens simples
-    t_PONTO_VIRGULA = r';'
-    t_DOIS_PONTOS = r':'
     t_ATRIBUICAO = r':='
+    t_DOIS_PONTOS = r':'
+    t_PONTO_VIRGULA = r';'
     t_PONTO = r'\.'
     t_VIRGULA = r','
     t_PARENTESES_ESQ = r'\('
@@ -102,12 +103,12 @@ class AnalisadorLexico:
             if not tok:
                 break
             self.tokens.append((tok.type, tok.value, tok.lineno))
-    
+
     # Funções auxiliares
-    def printTokens(self,):
+    def printTokens(self):
         for token in self.tokens:
             print(Cor.pintar(f"{token[0]} {(20-len(token[0]))*' '} Lexema: {token[1]} {(10-len(str(token[1])))*' '} linha: {token[2]}" , Cor.VERDE))
-    
-    def printErros(self,):
+
+    def printErros(self):
         for token in self.erros:
             print(Cor.pintar(f"Caracter ilegal '{token[0]}' na linha {token[1]}" , Cor.VERMELHO))

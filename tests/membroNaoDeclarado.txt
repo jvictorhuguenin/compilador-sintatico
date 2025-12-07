@@ -1,0 +1,12 @@
+program membroDesconhecido;
+const X := 1;
+type
+    pessoa := record
+                nome : integer;
+              end;
+
+var
+    p : pessoa;
+begin
+    p.idade := 1;
+end

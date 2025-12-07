@@ -1,0 +1,13 @@
+program retorno;
+const X := 1;
+var
+    a : integer;
+function retornaInteiro() : integer
+var r : real;
+begin
+    result := r;
+end
+
+begin
+    a := retornaInteiro();
+end
