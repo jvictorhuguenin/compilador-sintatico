@@ -25,7 +25,7 @@ begin
     end;
 end
 
-function exp(a: real; b: real) : real
+function exp(a: integer; b: integer) : integer
 var i : integer;
 begin
     i := 1;

@@ -1,0 +1,7 @@
+program indice;
+const X := 1;
+var
+    a : integer;
+begin
+    a[0] := 1;
+end

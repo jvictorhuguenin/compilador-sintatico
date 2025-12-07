@@ -1,0 +1,13 @@
+program tipoArg;
+const X := 1;
+var
+    r : real;
+    a : integer;
+function identidade(x: integer) : integer
+begin
+    result := x;
+end
+
+begin
+    a := identidade(r);
+end

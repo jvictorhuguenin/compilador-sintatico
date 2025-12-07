@@ -1,0 +1,7 @@
+program membro;
+const X := 1;
+var
+    a : integer;
+begin
+    a.campo := 1;
+end
