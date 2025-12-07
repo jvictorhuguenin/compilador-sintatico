@@ -1,0 +1,12 @@
+program qtd;
+const X := 1;
+var
+    a : integer;
+function identidade(x: integer) : integer
+begin
+    result := x;
+end
+
+begin
+    a := identidade(1, 2);
+end

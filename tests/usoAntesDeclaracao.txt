@@ -1,0 +1,4 @@
+program usoAntes;
+begin
+    a := 1;
+end

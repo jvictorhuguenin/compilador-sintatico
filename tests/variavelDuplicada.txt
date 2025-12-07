@@ -1,0 +1,7 @@
+program duplicado;
+const X := 1;
+var
+    a, a : integer;
+begin
+    a := 1;
+end

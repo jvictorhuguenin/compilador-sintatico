@@ -1,0 +1,8 @@
+program tipos;
+const X := 1;
+var
+    a : integer;
+    b : real;
+begin
+    a := b;
+end
