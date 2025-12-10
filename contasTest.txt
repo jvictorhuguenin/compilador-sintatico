@@ -1,0 +1,12 @@
+program contas;
+           
+var
+    A, B, C, D, F : integer;
+
+begin
+    A := 10;
+    B := A + 20;
+    C := B - 5;
+    D := A*B;
+    F := 60/10;
+end

@@ -23,13 +23,13 @@ class First:
     LISTA_FUNC = {Token.FUNCTION.value}
     FUNCAO = {Token.FUNCTION.value}
     NOME_FUNCAO = {Token.FUNCTION.value}
-    BLOCO_FUNCAO = {Token.VAR, Token.BEGIN.value}
+    BLOCO_FUNCAO = {Token.VAR.value, Token.BEGIN.value}
     BLOCO = {Token.BEGIN.value, Token.ID.value, Token.WHILE.value, Token.IF.value, Token.WRITE.value, Token.READ.value}
     LISTA_COM = {Token.ID.value, Token.WHILE.value, Token.IF.value, Token.WRITE.value, Token.READ.value}
     COMANDO = {Token.ID.value, Token.WHILE.value, Token.IF.value, Token.WRITE.value, Token.READ.value}
     ELSE = {Token.ELSE.value}
     VALOR = {Token.ID.value, Token.NUMERO.value}
-    VALOR_ = {Token.PARENTESES_ESQ.value,Token.PONTO.value}
+    VALOR_ = {Token.PARENTESES_ESQ.value, Token.PONTO.value, Token.COLCHETE_ESQ.value}
     LISTA_PARAM = {Token.PARENTESES_ESQ.value}
     LISTA_NOME = {Token.ID.value, Token.NUMERO.value}
     LISTA_NOME_ = {Token.VIRGULA.value}

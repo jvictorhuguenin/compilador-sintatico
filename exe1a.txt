@@ -1,0 +1,11 @@
+program e1a;
+           
+var
+    f1, f2, f3, f4 : integer;
+
+begin
+    if f2 > f1 then
+    begin
+        f3 := f4;
+    end;
+end

@@ -1,0 +1,11 @@
+program e1b;
+           
+var
+    f1 : integer;
+
+begin
+    while f1 > 0 
+    begin
+        f1 := f1 - 1;
+    end;
+end

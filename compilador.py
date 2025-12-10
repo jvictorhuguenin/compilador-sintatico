@@ -2,6 +2,7 @@ import sys
 from analisadores.AnalisadorLexico import AnalisadorLexico
 from analisadores.AnalisadorSintatico import AnalisadorSintatico
 from analisadores.AnalisadorSemantico import AnalisadorSemantico
+from geradores.GeradorCI import GeradorCodigoIntermediario
 
 def main():
     if len(sys.argv) < 2:
@@ -27,8 +28,23 @@ def main():
         sys.exit(1)
 
     Sintatico = AnalisadorSintatico(Lexo.tokens)
+
+    if Sintatico.erro:
+        sys.exit(1)
+
     Semantico = AnalisadorSemantico(Sintatico.arvoreSintatica)
     Semantico.analisar()
+
+    if Semantico.erros:
+        print("Erros semânticos encontrados:")
+        for erro in Semantico.erros:
+            print(f"- {erro}")
+        sys.exit(1)
+
+    gerador = GeradorCodigoIntermediario(Sintatico.arvoreSintatica)
+
+    for instr in gerador.codigo:
+        print(instr)
 
     if len(sys.argv) > 2:
         opcao = sys.argv[2].lower()
@@ -47,14 +63,6 @@ def main():
     else:
         print(f"Opção '{opcao}' não reconhecida.")
         print("Opções válidas: showTokens | showTree | showAll")
-
-    if Semantico.erros:
-        print("Erros semânticos encontrados:")
-        for erro in Semantico.erros:
-            print(f"- {erro}")
-        sys.exit(1)
-    else:
-        print("Análise semântica concluída sem erros.")
 
 if __name__ == "__main__":
     main()

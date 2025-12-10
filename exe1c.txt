@@ -1,0 +1,17 @@
+program e1c;
+       
+var
+    f1, f2, f3 : integer;
+
+function funcao(a: integer; b: integer) : integer
+begin
+    result := a + b;
+end
+
+begin
+    while f1 > 0 
+    begin
+        f3 := funcao(f1,f2);
+    end;
+end
+

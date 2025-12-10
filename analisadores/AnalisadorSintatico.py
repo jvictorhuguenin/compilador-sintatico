@@ -8,6 +8,7 @@ class AnalisadorSintatico:
     def __init__(self, listaTokens):
         self.tokens = listaTokens  # tuplas (tipo, valor, linha)
         self.pos = 0
+        self.erro = False
         self.arvoreSintatica = self.programa()
 
     def token_atual(self):
@@ -25,6 +26,7 @@ class AnalisadorSintatico:
         
     def tratarErro(self, valido="", follow={} ):
         token = self.token_atual()
+        self.erro = True
 
         if(not token):
             if(follow):
@@ -83,12 +85,10 @@ class AnalisadorSintatico:
     def declaracoes(self):
         # [DECLARACOES] ::= [DEF_CONST] [DEF_TIPOS] [DEF_VAR] [LISTA_FUNC] | ε
         filhos = []
-        token = self.token_atual()
-        if token and token[0] in First.DEF_CONST:
-            filhos.append(self.def_const())
-            filhos.append(self.def_tipos())
-            filhos.append(self.def_var())
-            filhos.append(self.lista_func())
+        filhos.append(self.def_const())
+        filhos.append(self.def_tipos())
+        filhos.append(self.def_var())
+        filhos.append(self.lista_func())
         return No("DECLARACOES", filhos)
 
     def def_const(self):
