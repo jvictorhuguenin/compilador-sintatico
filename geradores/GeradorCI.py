@@ -15,6 +15,10 @@ class GeradorCodigoIntermediario:
         self.variaveis = {}
 
         self.label_main = None
+
+        # Mapeamento de parâmetros da função atual: nome_param -> registrador temp
+        self.param_temps = {}
+
         self.gerar_programa(self.raiz)
 
     # utilidades básicas -----------------------------------------------------
@@ -94,7 +98,7 @@ class GeradorCodigoIntermediario:
             if self.tipo(f) == "DEF_VAR":
                 self.coletar_variaveis(f)
             elif self.tipo(f) == "LISTA_FUNC":
-                self.gerar_lista_func(f) 
+                self.gerar_lista_func(f)
 
     def gerar_lista_func(self, no):
         # LISTA_FUNC → FUNCAO LISTA_FUNC | ε
@@ -103,6 +107,24 @@ class GeradorCodigoIntermediario:
                 self.gerar_funcao(f)
             elif self.tipo(f) == "LISTA_FUNC":
                 self.gerar_lista_func(f)
+
+    # ----------------------- PARÂMETROS DE FUNÇÃO ---------------------------
+
+    def coletar_ids_param(self, no):
+        """
+        Coleta todos os IDs que representam parâmetros dentro de LISTA_VAR
+        (ou subárvore equivalente usada na declaração de parâmetros).
+        """
+        ids = []
+
+        def visita(n):
+            if self.tipo(n) == "ID":
+                ids.append(n.valor)
+            for f in getattr(n, "filhos", []):
+                visita(f)
+
+        visita(no)
+        return ids
 
     def gerar_funcao(self, no):
         # FUNCAO → NOME_FUNCAO BLOCO_FUNCAO
@@ -115,8 +137,10 @@ class GeradorCodigoIntermediario:
             elif self.tipo(f) == "BLOCO_FUNCAO":
                 bloco_fun_no = f
 
-        # --- extrai nome da função e parâmetros ---
         nome_func = None
+        parametros = []  # nomes dos parâmetros, na ordem declarada
+
+        # --- extrai nome da função e parâmetros ---
         if nome_no:
             for f in nome_no.filhos:
                 if self.tipo(f) == "ID":
@@ -124,12 +148,31 @@ class GeradorCodigoIntermediario:
                 elif self.tipo(f) == "LISTA_VAR":
                     # parâmetros são tratados como variáveis locais
                     self.coletar_variaveis(f)
+                    parametros.extend(self.coletar_ids_param(f))
 
         if nome_func is None:
             nome_func = "anon"
 
         # rótulo da função
         self.emit("label", nome_func, "-", "-")
+
+        # salva mapeamento de parâmetros anterior (caso haja aninhamento)
+        old_param_temps = self.param_temps
+        self.param_temps = {}
+
+        # prólogo da função: POP dos parâmetros em ordem inversa
+        # Chamador:
+        #   psh param1
+        #   psh param2
+        #   call funcao, 2, -
+        # Pilha (topo): param2, param1
+        # Função:
+        #   pop tX  ; param2
+        #   pop tY  ; param1
+        for nome_param in reversed(parametros):
+            reg = self.novo_temp()
+            self.emit("pop", reg, "-", "-")
+            self.param_temps[nome_param] = reg
 
         # --- corpo da função (variáveis locais + bloco begin...end) ---
         if bloco_fun_no:
@@ -141,6 +184,9 @@ class GeradorCodigoIntermediario:
         self.emit("lod", t, base, off)
         self.emit("mov", "r0", t, "-")
         self.emit("ret", "r0", "-", "-")
+
+        # restaura mapeamento de parâmetros anterior
+        self.param_temps = old_param_temps
 
     def gerar_bloco_funcao(self, no):
         # BLOCO_FUNCAO → DEF_VAR BLOCO | BLOCO
@@ -209,6 +255,10 @@ class GeradorCodigoIntermediario:
             var = self.obter_id_de_nome(nome_lhs)
             base, off = self.mem_var(var)
             self.emit("str", base, off, reg_valor)
+
+            # se for parâmetro da função atual, atualiza o registrador associado
+            if var in self.param_temps:
+                self.param_temps[var] = reg_valor
 
         # while
         elif self.tipo(filhos[0]) == "WHILE" or getattr(filhos[0], "valor", None) == "while":
@@ -426,11 +476,10 @@ class GeradorCodigoIntermediario:
             reg = self.gerar_parametro(p_no)
             self.emit("psh", reg, "-", "-")
 
+        # chamada da função com número de parâmetros
         self.emit("call", nome_func, len(parametros), "-")
 
-        # opcional: desempilha (se convenção exigir)
-        for _ in parametros:
-            self.emit("pop", self.novo_temp(), "-", "-")
+        # NÃO desempilha aqui: quem consome a pilha é a função (via pop)
 
         # assume que retorno está em r0
         reg_ret = self.novo_temp()
@@ -470,9 +519,15 @@ class GeradorCodigoIntermediario:
     def gerar_nome_rvalue(self, nome_no):
         """
         Carrega o valor de um NOME (variável simples).
-        Ignora campos (record) e índices de array para simplificar.
+        Se for parâmetro da função atual, usa o registrador associado (sem lod).
         """
         var = self.obter_id_de_nome(nome_no)
+
+        # Se for parâmetro da função atual, retorna o temp correspondente
+        if var in self.param_temps:
+            return self.param_temps[var]
+
+        # Caso contrário, variável "normal" em memória
         base, off = self.mem_var(var)
         reg = self.novo_temp()
         self.emit("lod", reg, base, off)

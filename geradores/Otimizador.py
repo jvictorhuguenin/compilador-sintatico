@@ -4,13 +4,17 @@ class OtimizadorCodigo:
     """
     Otimizador para o código intermediário.
 
-    Objetivos principais:
-    1. Remover 'jmp Lx' quando a próxima instrução é 'label Lx'.
-    2. Substituir temporários definidos por 'lod tN, id, 0' diretamente pelo id,
-       quando seguro, e depois remover os 'lod' mortos.
-    3. Fazer uma eliminação simples de código morto para temporários.
-    4. Renumerar temporários em ordem de primeira aparição (t1, t2, t3, ...).
-    5. Remover labels que não possuam nenhuma referência (jmp/jnz/call).
+    Etapas:
+      1) Remover 'jmp Lx' quando o fluxo já cairia em Lx (mesmo com labels intermediários).
+      2) Fazer alias de:
+            lod tX, id, 0  ->  tX ≡ id
+            ldc tX, N,  -  ->  tX ≡ N
+         somente quando:
+            - tX é definido exatamente uma vez,
+            - tX não é usado como base/offset em lod/str.
+      3) Eliminar instruções puras que definem temporários nunca usados.
+      4) Renumerar temporários (t1, t2, ...).
+      5) Remover labels não referenciados (jmp/jnz/call).
     """
 
     def __init__(self, codigo):
@@ -19,7 +23,7 @@ class OtimizadorCodigo:
         self.referencias = set()
 
     # ------------------------------------------------------------
-    # utilitários
+    # Utilidades básicas
     # ------------------------------------------------------------
 
     def parse(self, instr):
@@ -37,22 +41,20 @@ class OtimizadorCodigo:
         return op, a1, a2, a3
 
     def is_temp(self, x: str) -> bool:
-        return x.startswith("t")
+        return isinstance(x, str) and x.startswith("t")
 
     # ------------------------------------------------------------
-    # 1) remover jmp cuja próxima linha seja o label de destino
+    # 1) Remover jmp direto para label de destino
     # ------------------------------------------------------------
 
     def remover_jmp_para_proxima_label(self):
         """
-        Remove 'jmp Lx' quando o fluxo já cairia em Lx apenas seguindo o código.
-
-        Casos tratados:
+        Remove 'jmp Lx' quando a execução já cairia em Lx apenas seguindo o fluxo:
 
             jmp Lx, -, -
             label Lx, -, -
 
-        e também:
+        ou ainda:
 
             jmp Lx, -, -
             label La, -, -
@@ -60,7 +62,7 @@ class OtimizadorCodigo:
             ...
             label Lx, -, -
 
-        ou seja, entre o jmp e o label de destino só podem existir outros labels.
+        (entre o jmp e o destino só podem existir labels).
         """
         novo = []
         i = 0
@@ -72,7 +74,6 @@ class OtimizadorCodigo:
                 j = i + 1
                 encontrou_destino = False
 
-                # anda à frente enquanto só houver labels
                 while j < len(self.codigo):
                     opj, aj, _, _ = self.parse(self.codigo[j])
                     if opj != "label":
@@ -83,156 +84,186 @@ class OtimizadorCodigo:
                     j += 1
 
                 if encontrou_destino:
-                    # removemos apenas o jmp, mantemos todos os labels
+                    # removemos o jmp, mantemos os labels
                     i += 1
-                    continue  # não adiciona o jmp em 'novo'
+                    continue
 
-            # caso normal: só copia a instrução
             novo.append(self.codigo[i])
             i += 1
 
         self.codigo = novo
 
     # ------------------------------------------------------------
-    # 2) alias de 'lod tN, id, 0' -> tN ≡ id
+    # 2) Alias de lod/ldc
     # ------------------------------------------------------------
 
     def alias_lods(self):
         """
-        Cria um mapa de alias para:
+        Constrói alias para temporários definidos por:
 
-        - 'lod tX, id, 0'  ->  tX ≡ id
-        - 'ldc tX, N, -'   ->  tX ≡ N   (N literal numérico)
+            lod tX, id, 0  -> tX ≡ id
+            ldc tX, N, -   -> tX ≡ N
 
-        quando:
-        - tX é definido apenas uma vez,
-        - tX nunca é usado como destino em outra instrução,
-        - tX nunca aparece como base/offset em lod/str.
+        se:
+          - tX é definido uma única vez (len(defs[tX]) == 1)
+          - tX nunca é usado como base/offset em lod/str.
 
-        Depois substitui usos de tX por (id ou N) nas operações (a2/a3).
+        Depois substitui o uso de tX apenas em posições de USO
+        (nunca em posição de destino).
         """
 
         instrs = self.codigo
 
-        # 1) coletar infos de uso/def de temporários
-        defs = {}       # temp -> lista de índices onde é dest
-        base_uses = {}  # temp -> True se usado como base/offset em lod/str
+        # 1) Coletar definições de temporários (apenas em instruções que realmente escrevem em a1)
+        defs = {}       # temp -> [indices onde a1 é destino]
+        base_uses = {}  # temp -> True, se usado como base/offset em lod/str
+
+        op_def_a1 = {
+            "ldc", "lod", "mov", "add", "sub", "mul", "div",
+            "eql", "les", "grt", "neq"
+        }
 
         for i, instr in enumerate(instrs):
             op, a1, a2, a3 = self.parse(instr)
 
-            # destino
-            if self.is_temp(a1):
+            # destino em a1 apenas se o opcode realmente escreve em a1
+            if op in op_def_a1 and self.is_temp(a1):
                 defs.setdefault(a1, []).append(i)
 
             # usos como base/offset em lod/str
             if op in ("lod", "str"):
                 if op == "lod":
-                    base_v = a2
-                    off_v = a3
-                else:  # str
-                    base_v = a1
-                    off_v = a2
+                    base_v, off_v = a2, a3
+                else:  # str base, off, src
+                    base_v, off_v = a1, a2
                 for v in (base_v, off_v):
                     if self.is_temp(v):
                         base_uses[v] = True
 
-        # 2) decidir quais temps podem virar alias
-        alias_map = {}  # temp -> substituto (id ou literal numérico)
+        # 2) Determinar alias possíveis
+        alias_map = {}
 
         for t, def_idxs in defs.items():
-            # tem que ter exatamente uma definição
+            # exigimos uma única definição global (new_temp garante isso)
             if len(def_idxs) != 1:
                 continue
 
             idx = def_idxs[0]
             op, a1, a2, a3 = self.parse(instrs[idx])
 
-            # não pode ser usado como base/offset em lod/str
+            # se é usado como base/offset em lod/str, não fazemos alias
             if base_uses.get(t, False):
                 continue
 
-            # caso 1: lod t, id, 0  -> alias para id (não-temp)
-            if op == "lod":
-                base = a2
-                off = a3
-                if off == "0" and not self.is_temp(base):
-                    alias_map[t] = base
-                    continue
+            # caso a) lod tX, id, 0  -> alias para 'id'
+            if op == "lod" and a3 == "0" and not self.is_temp(a2):
+                alias_map[t] = a2
+                continue
 
-            # caso 2: ldc t, N, -   -> alias para N (literal numérico)
-            if op == "ldc":
-                val = a2
-                # só aliasamos se for literal numérico mesmo
-                if (val.lstrip("-").isdigit()):
-                    alias_map[t] = val
-                    continue
+            # caso b) ldc tX, N, -   -> alias para literal numérico
+            if op == "ldc" and a2.lstrip("-").isdigit():
+                alias_map[t] = a2
+                continue
 
-        # 3) aplicar alias nas instruções (apenas em usos, não em destino)
+        # 3) Aplicar alias nas posições de USO
         novo = []
 
         for instr in instrs:
             op, a1, a2, a3 = self.parse(instr)
 
-            # não mexe em a1 (destino), apenas em a2/a3
-            if self.is_temp(a2) and a2 in alias_map:
-                a2 = alias_map[a2]
-            if self.is_temp(a3) and a3 in alias_map:
-                a3 = alias_map[a3]
+            # posições de uso por opcode
+            usos_pos = []
+            if op in ("add", "sub", "mul", "div", "mov", "eql", "les", "grt", "neq"):
+                usos_pos = [2, 3]            # a2, a3
+            elif op == "lod":
+                usos_pos = [2, 3]            # base e offset (em geral não-temp; mantemos por segurança)
+            elif op == "str":
+                usos_pos = [1, 2, 3]         # base, off, src
+            elif op == "psh":
+                usos_pos = [1]               # valor empilhado
+            elif op == "jnz":
+                usos_pos = [2]               # cond
+            elif op == "ret":
+                usos_pos = [1]               # valor a retornar
+            else:
+                # call, jmp, label etc. não têm uso de temporário em posição especial
+                usos_pos = []
 
-            novo.append(f"{op} {a1}, {a2}, {a3}")
+            vals = [None, a1, a2, a3]
+
+            def sub(v):
+                if self.is_temp(v) and v in alias_map:
+                    return alias_map[v]
+                return v
+
+            for pos in usos_pos:
+                vals[pos] = sub(vals[pos])
+
+            a1n, a2n, a3n = vals[1], vals[2], vals[3]
+            novo.append(f"{op} {a1n}, {a2n}, {a3n}")
 
         self.codigo = novo
 
     # ------------------------------------------------------------
-    # 3) Dead Code Elimination de temporários (simples)
+    # 3) Dead Code Elimination simples de temporários
     # ------------------------------------------------------------
 
     def dce_temporarios(self):
         """
         Remove instruções "puras" que definem temporários nunca usados:
-        - ldc, lod, mov, add, sub, mul, div, eql, les, grt, neq
+
+            ldc, lod, mov, add, sub, mul, div, eql, les, grt, neq
+
+        Critério:
+          - a1 é um temporário,
+          - o temporário NUNCA aparece em nenhuma posição de USO.
         """
         puros = {"ldc", "lod", "mov", "add", "sub", "mul", "div",
                  "eql", "les", "grt", "neq"}
 
-        live = set()
-        novo_rev = []
-
-        for instr in reversed(self.codigo):
+        # 1) coletar todos os temporários usados em posições de USO
+        usados = set()
+        for instr in self.codigo:
             op, a1, a2, a3 = self.parse(instr)
 
-            # usos
-            uses = []
-            for v in (a2, a3):
+            usos = []
+            if op in ("add", "sub", "mul", "div", "mov",
+                      "eql", "les", "grt", "neq"):
+                usos = [a2, a3]
+            elif op == "lod":
+                usos = [a2, a3]
+            elif op == "str":
+                usos = [a1, a2, a3]
+            elif op == "psh":
+                usos = [a1]
+            elif op == "jnz":
+                usos = [a2]
+            elif op == "ret":
+                usos = [a1]
+
+            for v in usos:
                 if self.is_temp(v):
-                    uses.append(v)
+                    usados.add(v)
 
-            dest = a1 if self.is_temp(a1) else None
-
-            # se pura, define temp, e esse temp não está vivo → mata
-            if op in puros and dest is not None and dest not in live:
+        # 2) remover definições puras de temporários que nunca são usados
+        novo = []
+        for instr in self.codigo:
+            op, a1, a2, a3 = self.parse(instr)
+            if op in puros and self.is_temp(a1) and a1 not in usados:
+                # definição morta (tX nunca lido)
                 continue
+            novo.append(instr)
 
-            # mantém
-            novo_rev.append(instr)
-
-            # atualiza conjunto de vivos
-            for u in uses:
-                live.add(u)
-            if dest is not None and dest in live:
-                live.remove(dest)
-
-        self.codigo = list(reversed(novo_rev))
+        self.codigo = novo
 
     # ------------------------------------------------------------
-    # 4) Renumeração compacta de temporários
+    # 4) Renumerar temporários
     # ------------------------------------------------------------
 
     def renumerar_temporarios(self):
         """
-        Renomeia temporários em ordem de primeira aparição:
-          t7, t8, t9, ... -> t1, t2, t3, ...
+        Renomeia temporários em ordem de primeira aparição global:
+          t7, t12, t30, ... -> t1, t2, t3, ...
         """
         mapa = {}
         prox = 1
@@ -258,12 +289,12 @@ class OtimizadorCodigo:
         self.codigo = novo
 
     # ------------------------------------------------------------
-    # 5) Remover labels sem referência
+    # 5) Remover labels não referenciados
     # ------------------------------------------------------------
 
     def analisar_referencias_de_labels(self):
         """
-        Coleta todos os labels referenciados por jmp/jnz/call.
+        Coleta labels referenciados por jmp/jnz/call.
         """
         self.referencias = set()
         for instr in self.codigo:
@@ -273,7 +304,7 @@ class OtimizadorCodigo:
 
     def remover_labels_inuteis(self):
         """
-        Remove 'label X' quando X não aparece em nenhuma referência.
+        Remove 'label X, -, -' quando X não aparece em nenhuma referência.
         """
         novo = []
         for instr in self.codigo:
@@ -288,19 +319,19 @@ class OtimizadorCodigo:
     # ------------------------------------------------------------
 
     def otimizar(self):
-        # 1) remover jmp direto para label seguinte
+        # 1) remover jmps redundantes
         self.remover_jmp_para_proxima_label()
 
-        # 2) alias de lod tX, id, 0 -> tX ≡ id
+        # 2) alias de lod/ldc
         self.alias_lods()
 
-        # 3) elimina código morto de temporários
+        # 3) eliminar definições mortas de temporários
         self.dce_temporarios()
 
-        # 4) renumera temporários em ordem de aparição
+        # 4) renumerar temporários
         self.renumerar_temporarios()
 
-        # 5) remover labels sem referência (inclui 'e1c' e 'Lmain1' se ninguém usa)
+        # 5) remover labels não referenciados
         self.analisar_referencias_de_labels()
         self.remover_labels_inuteis()
 
