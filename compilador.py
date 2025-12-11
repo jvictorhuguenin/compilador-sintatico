@@ -3,6 +3,7 @@ from analisadores.AnalisadorLexico import AnalisadorLexico
 from analisadores.AnalisadorSintatico import AnalisadorSintatico
 from analisadores.AnalisadorSemantico import AnalisadorSemantico
 from geradores.GeradorCI import GeradorCodigoIntermediario
+from geradores.Otimizador import OtimizadorCodigo
 
 def main():
     if len(sys.argv) < 2:
@@ -43,8 +44,7 @@ def main():
 
     gerador = GeradorCodigoIntermediario(Sintatico.arvoreSintatica)
 
-    for instr in gerador.codigo:
-        print(instr)
+    print("Análise concluída: Tudo OK!");
 
     if len(sys.argv) > 2:
         opcao = sys.argv[2].lower()
@@ -58,6 +58,14 @@ def main():
     elif opcao == "showall":
         Lexo.printTokens()
         print(Sintatico.arvoreSintatica)
+    elif opcao == "showci":
+        for instr in gerador.codigo:
+            print(instr)
+    elif opcao == "showcio":
+        ot = OtimizadorCodigo(gerador.codigo)
+        codigo_otimizado = ot.otimizar()
+        for linha in codigo_otimizado:
+            print(linha)
     elif opcao is None:
         print("")
     else:
