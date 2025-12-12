@@ -131,16 +131,19 @@ class AnalisadorSintatico:
             return No("CONSTANTE", filhos)
         else:
             return self.tratarErro(follow=Follow.CONSTANTE) 
-
+        
     def const_valor(self):
         # [CONST_VALOR] ::= (“) sequência alfanumérica (“) | [EXP_MAT]
+        filhos = []
         token = self.token_atual()
         if token and token[0] == Token.STRING.value:
-            return self.tratarTerminal(Token.STRING)
-        elif token[0] in First.EXP_MAT:
-            return self.exp_mat()
+            filhos.append(self.tratarTerminal(Token.STRING))
+            return No("CONST_VALOR", filhos)
+        elif token and token[0] in First.EXP_MAT:
+            filhos.append(self.exp_mat())
+            return No("CONST_VALOR", filhos)
         else:
-            return self.tratarErro(follow=Follow.CONST_VALOR) 
+            return self.tratarErro(follow=Follow.CONST_VALOR)
 
     def def_tipos(self):
         # [DEF_TIPOS] ::= (type) [LISTA_TIPOS] | ε

@@ -42,8 +42,6 @@ def main():
             print(f"- {erro}")
         sys.exit(1)
 
-    gerador = GeradorCodigoIntermediario(Sintatico.arvoreSintatica)
-
     print("Análise concluída: Tudo OK!");
 
     if len(sys.argv) > 2:
@@ -59,9 +57,11 @@ def main():
         Lexo.printTokens()
         print(Sintatico.arvoreSintatica)
     elif opcao == "showci":
+        gerador = GeradorCodigoIntermediario(Sintatico.arvoreSintatica)
         for instr in gerador.codigo:
             print(instr)
     elif opcao == "showcio":
+        gerador = GeradorCodigoIntermediario(Sintatico.arvoreSintatica)
         ot = OtimizadorCodigo(gerador.codigo)
         codigo_otimizado = ot.otimizar()
         for linha in codigo_otimizado:

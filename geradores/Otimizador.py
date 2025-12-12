@@ -257,7 +257,56 @@ class OtimizadorCodigo:
         self.codigo = novo
 
     # ------------------------------------------------------------
-    # 4) Renumerar temporários
+    # 4) Substituir mov
+    # ------------------------------------------------------------
+
+    def peephole_mov_store(self):
+        """
+        Converte padrões:
+            mov tX, r0, -
+            str id, 0, tX
+
+        em:
+
+            mov id, r0, -
+
+        Somente quando:
+            - tX é temporário
+            - a store usa exatamente o mesmo tX
+            - entre as duas instruções não há nada
+        """
+
+        novo = []
+        i = 0
+        while i < len(self.codigo):
+            op1, a1_1, a2_1, a3_1 = self.parse(self.codigo[i])
+
+            # queremos: mov tX, r0, -
+            if op1 == "mov" and self.is_temp(a1_1):
+                t = a1_1  # temporário destino do mov
+
+                # verificar próxima instrução
+                if i + 1 < len(self.codigo):
+                    op2, a1_2, a2_2, a3_2 = self.parse(self.codigo[i+1])
+
+                    # queremos: str id, 0, tX
+                    if op2 == "str" and a3_2 == t and a2_2 == "0":
+                        destino = a1_2  # id final
+
+                        # substitui pelas duas em uma só
+                        novo.append(f"mov {destino}, {a2_1}, -")
+                        i += 2
+                        continue
+
+            # Caso não seja padrão, só copia
+            novo.append(self.codigo[i])
+            i += 1
+
+        self.codigo = novo
+
+
+    # ------------------------------------------------------------
+    # 5) Renumerar temporários
     # ------------------------------------------------------------
 
     def renumerar_temporarios(self):
@@ -289,7 +338,7 @@ class OtimizadorCodigo:
         self.codigo = novo
 
     # ------------------------------------------------------------
-    # 5) Remover labels não referenciados
+    # 6) Remover labels não referenciados
     # ------------------------------------------------------------
 
     def analisar_referencias_de_labels(self):
@@ -328,10 +377,13 @@ class OtimizadorCodigo:
         # 3) eliminar definições mortas de temporários
         self.dce_temporarios()
 
-        # 4) renumerar temporários
+        # 4) substituir mov
+        self.peephole_mov_store()       
+
+        # 5) renumerar temporários
         self.renumerar_temporarios()
 
-        # 5) remover labels não referenciados
+        # 6) remover labels não referenciados
         self.analisar_referencias_de_labels()
         self.remover_labels_inuteis()
 

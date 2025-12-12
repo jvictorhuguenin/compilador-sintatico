@@ -1,0 +1,53 @@
+program full_opt;
+       
+const
+    C1 := 10;
+    C2 := 20;
+
+type
+    TInt    := integer;
+    TReal   := real;
+
+var
+    a, b, c, d : integer;
+    x, y       : integer;
+    f1, f2, f3 : integer;
+
+function somaMul(p: integer; q: integer) : integer
+var
+    tmp : integer;
+begin
+    tmp    := p + q;
+    result := tmp;
+end
+
+function decEnquantoPositivo(valor: integer) : integer
+begin
+    while valor > 0
+    begin
+        valor := valor - 1;
+    end;
+    result := valor;
+end
+
+begin
+    x := a - b * c / d + a - b * c * d;
+
+    f3 := somaMul(f1, f2);
+
+    if a + 1 > b then
+    begin
+        y := C1 + C2;
+    end
+    else
+    begin
+        y := somaMul(C1, C2);
+    end;
+
+    while f1 > 0
+    begin
+        f3 := somaMul(f1, f2);
+        f1 := f1 - 1;
+    end;
+
+end
